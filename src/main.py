@@ -42,9 +42,16 @@ class App:
             self.renderer = Renderer(self.ctx)
         except Exception as e:
             print(f"Failed to initialize Renderer: {e}")
-            self.running = False # Stop app if renderer fails
-            # self.quit() # Or directly quit
+            self.running = False
             return
+
+        # Initial chunk mesh generation
+        if self.running: # Only if renderer initialized successfully
+            print("Building initial chunk meshes...")
+            for chunk_coord_key, chunk in self.world.chunks.items():
+                chunk.build_mesh() # world_context=self.world would be for advanced neighbor lookup
+                self.renderer.update_chunk_mesh(chunk_coord_key, chunk.mesh_vertices)
+            print("Initial chunk meshes built.")
 
 
         # Mouse control
@@ -153,21 +160,30 @@ class App:
             # Let's render a 32x16x32 block area starting from world origin (0,0,0)
             # This will cover parts of chunk (0,0,0) and potentially (1,0,0), (0,0,1), (1,0,1) etc.
 
-            render_range_x = range(0, CHUNK_SIZE[0]) # Render one chunk width
-            render_range_y = range(0, CHUNK_SIZE[1]) # Render one chunk height
-            render_range_z = range(0, CHUNK_SIZE[2]) # Render one chunk depth
+            # Update meshes for chunks that need it
+            for chunk_coord_key, chunk in self.world.chunks.items():
+                if chunk.needs_remesh:
+                    # print(f"Remeshing chunk {chunk_coord_key}...")
+                    chunk.build_mesh() # world_context=self.world for advanced neighbors
+                    self.renderer.update_chunk_mesh(chunk_coord_key, chunk.mesh_vertices)
+                    # chunk.needs_remesh is set to False inside build_mesh()
 
-            for wx in render_range_x:
-                for wy in render_range_y:
-                    for wz in render_range_z:
-                        block_id = self.world.get_block(wx, wy, wz)
-                        if block_id != 0: # 0 is air
-                            # Pass the already updated self.view_matrix and self.projection_matrix
-                            self.renderer.render_block(
-                                (float(wx), float(wy), float(wz)), # Position needs to be float for pyrr
-                                self.view_matrix,
-                                self.projection_matrix
-                            )
+            # Render all chunks
+            for chunk_coord_key, chunk in self.world.chunks.items():
+                # Calculate chunk's world position in pixels/units for the model matrix
+                # chunk_coord_key is (cx, cy, cz) in chunk coordinates.
+                # CHUNK_SIZE is (width, height, depth) in blocks per chunk.
+                world_pixel_pos = (
+                    chunk_coord_key[0] * CHUNK_SIZE[0],
+                    chunk_coord_key[1] * CHUNK_SIZE[1],
+                    chunk_coord_key[2] * CHUNK_SIZE[2]
+                )
+                self.renderer.render_chunk(
+                    chunk_coord_key,    # Key for the renderer to find VAO/VBO
+                    world_pixel_pos,    # Actual world position for model matrix
+                    self.view_matrix,
+                    self.projection_matrix
+                )
 
             # Swap buffers
             pg.display.flip()

@@ -1,5 +1,6 @@
 import numpy as np
 from pyrr import matrix44, Vector3, vector
+from src.interaction import cast_ray, RaycastResult # Assuming interaction.py is in src/
 
 class Camera:
     def __init__(self, position=np.array([0.0, 0.0, 3.0], dtype=np.float32),
@@ -34,6 +35,10 @@ class Camera:
         # Eye: camera position
         # Target: position + front vector
         # Up: camera's up vector
+        # pyrr's create_look_at expects numpy arrays or lists, not raw Vector3 objects for all args
+        # self.position and self.front are currently pyrr.Vector3
+        # We need to ensure they are converted if necessary, or that pyrr handles them.
+        # pyrr functions typically handle its own vector types correctly.
         return matrix44.create_look_at(self.position, self.position + self.front, self.up)
 
     def process_keyboard(self, direction, delta_time):
@@ -63,3 +68,27 @@ class Camera:
                 self.pitch = -89.0
 
         self.update_camera_vectors()
+
+    def get_raycast_target(self, world, max_distance=5.0):
+        """
+        Casts a ray from the camera's position in its front direction to find a target block.
+        Args:
+            world: The world object (with a get_block method).
+            max_distance: Maximum distance for the raycast.
+        Returns:
+            A RaycastResult object if a block is hit, otherwise None.
+        """
+        # self.position and self.front are pyrr.Vector3 objects.
+        # cast_ray expects numpy arrays or list-like objects that np.array() can convert.
+        # pyrr.Vector3 can be converted to numpy array by np.array(vector_obj.tolist())
+        # or sometimes directly np.array(vector_obj) if pyrr objects behave like sequences.
+        # Let's assume np.array() handles pyrr.Vector3 directly or via their internal structure.
+
+        # Explicit conversion to list for np.array might be safer if direct conversion is problematic:
+        # origin_np = np.array(list(self.position))
+        # direction_np = np.array(list(self.front))
+        # return cast_ray(world, origin_np, direction_np, max_distance)
+
+        # Simpler: pass pyrr vectors directly if np.array() in cast_ray handles them.
+        # (pyrr vectors are often numpy-compatible or subclasses)
+        return cast_ray(world, self.position, self.front, max_distance)
